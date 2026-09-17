@@ -22,6 +22,7 @@
 #include "storage/keys.h"
 
 #define KEYCARD_AID_LEN 9
+#define NEOPGP_AID_LEN 16
 #define KEYCARD_MIN_VERSION 0x0301
 #define KEYCARD_SCV2_MIN_VERSION 0x0400
 
@@ -29,6 +30,10 @@
 #define KEYCARD_DEF_PUK_RETRIES 5
 
 const uint8_t KEYCARD_AID[] = {0xa0, 0x00, 0x00, 0x08, 0x04, 0x00, 0x01, 0x01, 0x01};
+const uint8_t NEOPGP_AID[] = {
+  0xd2, 0x76, 0x00, 0x01, 0x24, 0x01, 0x03, 0x04,
+  0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
 const uint8_t KEYCARD_DEFAULT_PSK[] = {0x67, 0x5d, 0xea, 0xbb, 0x0d, 0x7c, 0x72, 0x4b, 0x4a, 0x36, 0xca, 0xad, 0x0e, 0x28, 0x08, 0x26, 0x15, 0x9e, 0x89, 0x88, 0x6f, 0x70, 0x82, 0x53, 0x5d, 0x43, 0x1e, 0x92, 0x48, 0x48, 0xbc, 0xf1};
 
 static void keycard_random_puk(uint8_t puk[KEYCARD_PUK_LEN]) {
@@ -617,6 +622,28 @@ void keycard_activate(keycard_t* kc) {
   if (kc->sc.state != SC_READY) {
     ui_card_activation_error();
     return;
+  }
+
+  /*
+   * Probe for a NeoPGP/OpenPGP applet when this is not a normal Keycard.
+   *
+   * This is intentionally only a detection path for now. OpenPGP cards do
+   * not use the Keycard pairing and secure-channel protocol below.
+   */
+  if ((keycard_cmd_select(kc, KEYCARD_AID, KEYCARD_AID_LEN) == ERR_OK) &&
+      (APDU_SW(&kc->apdu) != SW_OK)) {
+    if ((keycard_cmd_select(kc, NEOPGP_AID, NEOPGP_AID_LEN) == ERR_OK) &&
+        (APDU_SW(&kc->apdu) == SW_OK)) {
+      ui_info(
+        ICON_INFO_SUCCESS,
+        "OpenPGP card detected",
+        "NeoPGP applet selected",
+        0
+      );
+
+      smartcard_deactivate(&kc->sc);
+      return;
+    }
   }
 
   app_err_t res;
