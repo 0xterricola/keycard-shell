@@ -17,6 +17,7 @@ static inline void core_action_run(i18n_str_id_t menu) {
     break;
   case MENU_OPENPGP:
     core_openpgp_run();
+    ui_prompt("DEBUG", "OpenPGP returned", 0);
     break;
   case MENU_CONNECT:
     core_connect_wallet();
