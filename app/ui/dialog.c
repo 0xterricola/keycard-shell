@@ -69,16 +69,9 @@ app_err_t dialog_wait_dismiss(ui_info_opt_t opts) {
   }
 }
 
-static app_err_t dialog_wait_paged_opts(uint16_t* page, uint16_t last_page, ui_info_opt_t opts) {
-  bool hold = (opts & UI_INFO_DANGEROUS) && (*page == last_page);
-
-  dialog_nav_hints(ICON_NAV_CANCEL, hold ? ICON_NAV_NEXT_HOLD : ICON_NAV_NEXT);
+static app_err_t dialog_wait_paged(uint16_t* page, uint16_t last_page) {
+  dialog_nav_hints(ICON_NAV_CANCEL, ICON_NAV_NEXT);
   dialog_pager(*page, last_page, true);
-
-  if (hold) {
-    screen_text_ctx_t ctx = { .font = TH_FONT_TEXT, .bg = TH_COLOR_BG, .fg = TH_COLOR_ACCENT, .x = TH_NAV_HINT_INPUT_PROCEED_RIGHT_X, .y = TH_NAV_HINT_INPUT_TOP };
-    screen_draw_string(&ctx, LSTR(INPUT_NAV_PROCEED));
-  }
 
   switch(ui_wait_keypress(pdMS_TO_TICKS(TX_CONFIRM_TIMEOUT))) {
   case KEYPAD_KEY_LEFT:
@@ -100,22 +93,10 @@ static app_err_t dialog_wait_paged_opts(uint16_t* page, uint16_t last_page, ui_i
   case KEYPAD_KEY_INVALID:
     return ERR_CANCEL;
   case KEYPAD_KEY_CONFIRM:
-    if (!(opts & UI_INFO_DANGEROUS)) {
-      return ERR_OK;
-    }
-
-    if (*page == last_page && g_ui_ctx.keypad.last_key_long) {
-      return ERR_OK;
-    }
-
-    return ERR_NEED_MORE_DATA;
+    return ERR_OK;
   default:
     return ERR_NEED_MORE_DATA;
   }
-}
-
-static app_err_t dialog_wait_paged(uint16_t* page, uint16_t last_page) {
-  return dialog_wait_paged_opts(page, last_page, 0);
 }
 
 app_err_t dialog_begin_line(screen_text_ctx_t* ctx, uint16_t line_height) {
@@ -970,7 +951,6 @@ app_err_t dialog_display_paged_text() {
   const char* title = g_ui_cmd.params.paged_text.title;
   const uint8_t* data = (const uint8_t*) g_ui_cmd.params.paged_text.text;
   size_t len = g_ui_cmd.params.paged_text.len;
-  ui_info_opt_t opts = g_ui_cmd.params.paged_text.options;
 
   screen_text_ctx_t ctx = {
       .font = TH_FONT_TEXT,
@@ -993,7 +973,7 @@ app_err_t dialog_display_paged_text() {
     dialog_blank(TH_TITLE_HEIGHT);
 
     screen_draw_text(&ctx, MESSAGE_MAX_X, MESSAGE_MAX_Y, &data[offset], (len - offset), false, false);
-    ret = dialog_wait_paged_opts(&pager.page, pager.last_page, opts);
+    ret = dialog_wait_paged(&pager.page, pager.last_page);
   }
 
   return ret;

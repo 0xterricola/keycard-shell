@@ -348,11 +348,10 @@ static app_err_t core_openpgp_confirm_identity(const core_openpgp_identity_t *id
     memcpy(&review[review_len], fingerprint_hex, OPENPGP_V4_FINGERPRINT_LEN * 2);
     review_len += OPENPGP_V4_FINGERPRINT_LEN * 2;
 
-    if (ui_display_paged_text_opts(
+    if (ui_display_paged_text(
             LSTR(OPENPGP_APPROVE_TITLE),
             review,
-            review_len,
-            UI_INFO_DANGEROUS) != CORE_EVT_UI_OK) {
+            review_len) != CORE_EVT_UI_OK) {
         return ERR_CANCEL;
     }
 
@@ -525,11 +524,10 @@ static app_err_t core_openpgp_confirm_message(const core_openpgp_message_t *mess
     memcpy(&review[review_len], fingerprint_hex, OPENPGP_V4_FINGERPRINT_LEN * 2);
     review_len += OPENPGP_V4_FINGERPRINT_LEN * 2;
 
-    if (ui_display_paged_text_opts(
+    if (ui_display_paged_text(
             LSTR(OPENPGP_SIGN_APPROVE_TITLE),
             review,
-            review_len,
-            UI_INFO_DANGEROUS) != CORE_EVT_UI_OK) {
+            review_len) != CORE_EVT_UI_OK) {
         return ERR_CANCEL;
     }
 
