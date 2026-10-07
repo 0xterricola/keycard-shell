@@ -343,7 +343,6 @@ const char *const i18n_english_strings[] = {
     "Creation time",
     "Fingerprint",
     "Create OpenPGP identity",
-    "Approve this UID, creation time, and fingerprint?",
     "OpenPGP message",
     "Signature time",
     "Sign OpenPGP message",
