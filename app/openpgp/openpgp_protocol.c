@@ -100,48 +100,6 @@ int openpgp_protocol_parse_request(const uint8_t *data, size_t data_len, openpgp
     return 0;
 }
 
-int openpgp_protocol_build_request(uint8_t operation, const uint8_t *uid, size_t uid_len, uint32_t creation_time, uint8_t *out, size_t out_capacity, size_t *out_len) {
-
-    zcbor_state_t states[4];
-    struct zcbor_string uid_string;
-
-    if (uid == NULL || out == NULL || out_len == NULL) {
-        return -1;
-    }
-
-    if (operation != OPENPGP_OP_CREATE_IDENTITY ||
-        uid_len == 0 ||
-        uid_len > OPENPGP_UID_MAX_LEN ||
-        creation_time == 0) {
-        return -1;
-    }
-
-    uid_string.value = uid;
-    uid_string.len = uid_len;
-
-    zcbor_new_encode_state(states, 4, out, out_capacity, 1);
-
-    if (!zcbor_map_start_encode(states, OPENPGP_CREATE_IDENTITY_REQUEST_MAP_ENTRIES) ||
-        !zcbor_uint32_put(states, OPENPGP_REQUEST_KEY_VERSION) ||
-        !zcbor_uint32_put(states, OPENPGP_PROTOCOL_VERSION) ||
-        !zcbor_uint32_put(states, OPENPGP_REQUEST_KEY_OPERATION) ||
-        !zcbor_uint32_put(states, operation) ||
-        !zcbor_uint32_put(states, OPENPGP_REQUEST_KEY_PAYLOAD) ||
-        !zcbor_bstr_encode(states, &uid_string) ||
-        !zcbor_uint32_put(states, OPENPGP_REQUEST_KEY_CREATION_TIME) ||
-        !zcbor_uint32_put(states, creation_time)) {
-        zcbor_list_map_end_force_encode(states);
-        return -1;
-    }
-
-    if (!zcbor_map_end_encode(states, OPENPGP_CREATE_IDENTITY_REQUEST_MAP_ENTRIES)) {
-        return -1;
-    }
-
-    *out_len = states[0].payload - out;
-    return 0;
-}
-
 int openpgp_protocol_build_sign_message_request(const uint8_t *message, size_t message_len, uint32_t key_creation_time, uint32_t signature_creation_time, uint8_t *out, size_t out_capacity, size_t *out_len) {
 
     zcbor_state_t states[4];
