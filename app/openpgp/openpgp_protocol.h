@@ -54,6 +54,4 @@ typedef struct {
  */
 int openpgp_protocol_parse_request(const uint8_t *data, size_t data_len, openpgp_request_t *request);
 
-int openpgp_protocol_build_sign_message_request(const uint8_t *message, size_t message_len, uint32_t key_creation_time, uint32_t signature_creation_time, uint8_t *out, size_t out_capacity, size_t *out_len);
-
 #endif
