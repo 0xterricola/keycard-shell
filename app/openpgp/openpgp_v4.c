@@ -427,15 +427,13 @@ int openpgp_v4_build_signature_packet(const uint8_t *sig_fields, size_t sig_fiel
   body[p++] = digest[0];
   body[p++] = digest[1];
 
-  if (encode_mpi(&raw_signature[0], 32, &body[p],
-                 sizeof(body) - p, &mpi_len) != 0) {
+  if (encode_mpi(&raw_signature[0], 32, &body[p], sizeof(body) - p, &mpi_len) != 0) {
     return -1;
   }
 
   p += mpi_len;
 
-  if (encode_mpi(&raw_signature[32], 32, &body[p],
-                 sizeof(body) - p, &mpi_len) != 0) {
+  if (encode_mpi(&raw_signature[32], 32, &body[p], sizeof(body) - p, &mpi_len) != 0) {
     return -1;
   }
 

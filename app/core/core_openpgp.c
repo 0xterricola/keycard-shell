@@ -117,14 +117,7 @@ static app_err_t core_openpgp_prepare_primary_key(core_openpgp_identity_t *ident
         return ERR_DATA;
     }
 
-    return core_openpgp_prepare_key(
-        identity->path,
-        identity->path_len,
-        identity->creation_time,
-        identity->primary_key_body,
-        sizeof(identity->primary_key_body),
-        &identity->primary_key_body_len,
-        identity->fingerprint);
+    return core_openpgp_prepare_key(identity->path, identity->path_len, identity->creation_time, identity->primary_key_body, sizeof(identity->primary_key_body), &identity->primary_key_body_len, identity->fingerprint);
 }
 
 static app_err_t core_openpgp_prepare_uid_certification(core_openpgp_identity_t *identity) {
@@ -265,14 +258,7 @@ static int core_openpgp_format_unix_time_utc(uint32_t timestamp, char *out, size
     return 0;
 }
 
-static int core_openpgp_review_append_field(
-    char *review,
-    size_t *review_len,
-    const char *title,
-    const uint8_t *value,
-    size_t value_len,
-    uint8_t strip_cr,
-    uint8_t add_separator) {
+static int core_openpgp_review_append_field(char *review, size_t *review_len, const char *title, const uint8_t *value, size_t value_len, uint8_t strip_cr, uint8_t add_separator) {
 
     if (review == NULL ||
         review_len == NULL ||
@@ -367,44 +353,17 @@ static app_err_t core_openpgp_confirm_identity(const core_openpgp_identity_t *id
 
     base16_encode(fingerprint, fingerprint_hex, OPENPGP_V4_FINGERPRINT_LEN);
 
-    if (core_openpgp_format_unix_time_utc(
-            creation_time,
-            creation_time_utc,
-            sizeof(creation_time_utc)) != 0) {
+    if (core_openpgp_format_unix_time_utc(creation_time, creation_time_utc, sizeof(creation_time_utc)) != 0) {
         return ERR_DATA;
     }
 
-    if (core_openpgp_review_append_field(
-            review,
-            &review_len,
-            LSTR(OPENPGP_UID_TITLE),
-            uid,
-            uid_len,
-            0,
-            1) != 0 ||
-        core_openpgp_review_append_field(
-            review,
-            &review_len,
-            LSTR(OPENPGP_CREATION_TIME_TITLE),
-            (const uint8_t *) creation_time_utc,
-            CORE_OPENPGP_UTC_TIME_LEN,
-            0,
-            1) != 0 ||
-        core_openpgp_review_append_field(
-            review,
-            &review_len,
-            LSTR(OPENPGP_FINGERPRINT_TITLE),
-            (const uint8_t *) fingerprint_hex,
-            OPENPGP_V4_FINGERPRINT_LEN * 2,
-            0,
-            0) != 0) {
+    if (core_openpgp_review_append_field(review, &review_len, LSTR(OPENPGP_UID_TITLE), uid, uid_len, 0, 1) != 0 ||
+        core_openpgp_review_append_field(review, &review_len, LSTR(OPENPGP_CREATION_TIME_TITLE), (const uint8_t *) creation_time_utc, CORE_OPENPGP_UTC_TIME_LEN, 0, 1) != 0 ||
+        core_openpgp_review_append_field(review, &review_len, LSTR(OPENPGP_FINGERPRINT_TITLE), (const uint8_t *) fingerprint_hex, OPENPGP_V4_FINGERPRINT_LEN * 2, 0, 0) != 0) {
         return ERR_DATA;
     }
 
-    if (ui_display_paged_text(
-            LSTR(OPENPGP_APPROVE_TITLE),
-            review,
-            review_len) != CORE_EVT_UI_OK) {
+    if (ui_display_paged_text(LSTR(OPENPGP_APPROVE_TITLE), review, review_len) != CORE_EVT_UI_OK) {
         return ERR_CANCEL;
     }
 
@@ -460,14 +419,7 @@ static app_err_t core_openpgp_prepare_message(core_openpgp_message_t *message) {
         return ERR_DATA;
     }
 
-    app_err_t err = core_openpgp_prepare_key(
-        message->path,
-        message->path_len,
-        message->key_creation_time,
-        primary_key_body,
-        sizeof(primary_key_body),
-        &primary_key_body_len,
-        message->fingerprint);
+    app_err_t err = core_openpgp_prepare_key(message->path, message->path_len, message->key_creation_time, primary_key_body, sizeof(primary_key_body), &primary_key_body_len, message->fingerprint);
 
     if (err != ERR_OK) {
         return err;
@@ -477,12 +429,7 @@ static app_err_t core_openpgp_prepare_message(core_openpgp_message_t *message) {
         return ERR_CRYPTO;
     }
 
-    if (openpgp_v4_build_sig_fields(
-            message->fingerprint,
-            message->signature_creation_time,
-            message->sig_fields,
-            sizeof(message->sig_fields),
-            &sig_fields_len) != 0) {
+    if (openpgp_v4_build_sig_fields(message->fingerprint, message->signature_creation_time, message->sig_fields, sizeof(message->sig_fields), &sig_fields_len) != 0) {
         return ERR_CRYPTO;
     }
 
@@ -490,21 +437,11 @@ static app_err_t core_openpgp_prepare_message(core_openpgp_message_t *message) {
         return ERR_CRYPTO;
     }
 
-    if (openpgp_v4_canonicalize_text(
-            message->message,
-            message->message_len,
-            canonical,
-            sizeof(canonical),
-            &canonical_len) != 0) {
+    if (openpgp_v4_canonicalize_text(message->message, message->message_len, canonical, sizeof(canonical), &canonical_len) != 0) {
         return ERR_DATA;
     }
 
-    if (openpgp_v4_digest(
-            canonical,
-            canonical_len,
-            message->sig_fields,
-            sig_fields_len,
-            message->digest) != 0) {
+    if (openpgp_v4_digest(canonical, canonical_len, message->sig_fields, sig_fields_len, message->digest) != 0) {
         memzero(canonical, sizeof(canonical));
         return ERR_CRYPTO;
     }
@@ -528,44 +465,17 @@ static app_err_t core_openpgp_confirm_message(const core_openpgp_message_t *mess
 
     base16_encode(message->fingerprint, fingerprint_hex, OPENPGP_V4_FINGERPRINT_LEN);
 
-    if (core_openpgp_format_unix_time_utc(
-            message->signature_creation_time,
-            signature_time_utc,
-            sizeof(signature_time_utc)) != 0) {
+    if (core_openpgp_format_unix_time_utc(message->signature_creation_time, signature_time_utc, sizeof(signature_time_utc)) != 0) {
         return ERR_DATA;
     }
 
-    if (core_openpgp_review_append_field(
-            review,
-            &review_len,
-            LSTR(OPENPGP_MESSAGE_TITLE),
-            message->message,
-            message->message_len,
-            1,
-            1) != 0 ||
-        core_openpgp_review_append_field(
-            review,
-            &review_len,
-            LSTR(OPENPGP_SIGNATURE_TIME_TITLE),
-            (const uint8_t *) signature_time_utc,
-            CORE_OPENPGP_UTC_TIME_LEN,
-            0,
-            1) != 0 ||
-        core_openpgp_review_append_field(
-            review,
-            &review_len,
-            LSTR(OPENPGP_FINGERPRINT_TITLE),
-            (const uint8_t *) fingerprint_hex,
-            OPENPGP_V4_FINGERPRINT_LEN * 2,
-            0,
-            0) != 0) {
+    if (core_openpgp_review_append_field(review, &review_len, LSTR(OPENPGP_MESSAGE_TITLE), message->message, message->message_len, 1, 1) != 0 ||
+        core_openpgp_review_append_field(review, &review_len, LSTR(OPENPGP_SIGNATURE_TIME_TITLE), (const uint8_t *) signature_time_utc, CORE_OPENPGP_UTC_TIME_LEN, 0, 1) != 0 ||
+        core_openpgp_review_append_field(review, &review_len, LSTR(OPENPGP_FINGERPRINT_TITLE), (const uint8_t *) fingerprint_hex, OPENPGP_V4_FINGERPRINT_LEN * 2, 0, 0) != 0) {
         return ERR_DATA;
     }
 
-    if (ui_display_paged_text(
-            LSTR(OPENPGP_SIGN_APPROVE_TITLE),
-            review,
-            review_len) != CORE_EVT_UI_OK) {
+    if (ui_display_paged_text(LSTR(OPENPGP_SIGN_APPROVE_TITLE), review, review_len) != CORE_EVT_UI_OK) {
         return ERR_CANCEL;
     }
 
@@ -605,22 +515,13 @@ static app_err_t core_openpgp_sign_message_at_path(core_openpgp_message_t *messa
 
     keycard_t *kc = &g_core.keycard;
 
-    if (keycard_cmd_sign(
-            kc,
-            KEYCARD_SIGN_ECDSA_SECP256K1,
-            message->path,
-            (uint8_t) message->path_len,
-            message->digest) != ERR_OK ||
+    if (keycard_cmd_sign(kc, KEYCARD_SIGN_ECDSA_SECP256K1, message->path, (uint8_t) message->path_len, message->digest) != ERR_OK ||
         APDU_SW(&kc->apdu) != 0x9000) {
         memzero(card_signature, sizeof(card_signature));
         return ERR_CRYPTO;
     }
 
-    if (keycard_read_signature(
-            APDU_RESP(&kc->apdu),
-            kc->apdu.lr,
-            message->digest,
-            card_signature) != ERR_OK) {
+    if (keycard_read_signature(APDU_RESP(&kc->apdu), kc->apdu.lr, message->digest, card_signature) != ERR_OK) {
         memzero(card_signature, sizeof(card_signature));
         return ERR_DATA;
     }
@@ -628,20 +529,9 @@ static app_err_t core_openpgp_sign_message_at_path(core_openpgp_message_t *messa
     memcpy(message->raw_signature, card_signature, OPENPGP_RAW_ECDSA_LEN);
     memzero(card_signature, sizeof(card_signature));
 
-    memcpy(
-        issuer_key_id,
-        &message->fingerprint[OPENPGP_V4_FINGERPRINT_LEN - sizeof(issuer_key_id)],
-        sizeof(issuer_key_id));
+    memcpy(issuer_key_id, &message->fingerprint[OPENPGP_V4_FINGERPRINT_LEN - sizeof(issuer_key_id)], sizeof(issuer_key_id));
 
-    if (openpgp_v4_build_signature_packet(
-            message->sig_fields,
-            sizeof(message->sig_fields),
-            message->digest,
-            message->raw_signature,
-            issuer_key_id,
-            out,
-            out_capacity,
-            &signature_packet_len) != 0) {
+    if (openpgp_v4_build_signature_packet(message->sig_fields, sizeof(message->sig_fields), message->digest, message->raw_signature, issuer_key_id, out, out_capacity, &signature_packet_len) != 0) {
         memzero(message->raw_signature, sizeof(message->raw_signature));
         return ERR_CRYPTO;
     }
@@ -997,11 +887,7 @@ static app_err_t core_openpgp_qr_run(uint8_t *path, uint16_t path_len) {
         operation.identity.uid_len = request.uid_len;
         operation.identity.creation_time = request.creation_time;
 
-        err = core_openpgp_create_identity_at_path(
-            &operation.identity,
-            response_output,
-            CORE_OPENPGP_IDENTITY_MAX_LEN,
-            &response_len);
+        err = core_openpgp_create_identity_at_path(&operation.identity, response_output, CORE_OPENPGP_IDENTITY_MAX_LEN, &response_len);
     } else if (request.operation == OPENPGP_OP_SIGN_MESSAGE) {
         if (request.message == NULL ||
             request.message_len == 0 ||
@@ -1018,11 +904,7 @@ static app_err_t core_openpgp_qr_run(uint8_t *path, uint16_t path_len) {
         operation.message.key_creation_time = request.key_creation_time;
         operation.message.signature_creation_time = request.signature_creation_time;
 
-        err = core_openpgp_sign_message_at_path(
-            &operation.message,
-            response_output,
-            CORE_OPENPGP_SIGNATURE_PACKET_MAX_LEN,
-            &response_len);
+        err = core_openpgp_sign_message_at_path(&operation.message, response_output, CORE_OPENPGP_SIGNATURE_PACKET_MAX_LEN, &response_len);
     } else {
         return ERR_DATA;
     }
