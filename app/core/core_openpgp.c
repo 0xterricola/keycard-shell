@@ -268,6 +268,75 @@ static int core_openpgp_format_unix_time_utc(uint32_t timestamp, char *out, size
     return 0;
 }
 
+static int core_openpgp_review_append_field(
+    char *review,
+    size_t *review_len,
+    const char *title,
+    const uint8_t *value,
+    size_t value_len,
+    uint8_t strip_cr,
+    uint8_t add_separator) {
+
+    if (review == NULL ||
+        review_len == NULL ||
+        title == NULL ||
+        value == NULL ||
+        *review_len > MEM_HEAP_SIZE) {
+        return -1;
+    }
+
+    size_t title_len = strlen(title);
+    size_t rendered_value_len = value_len;
+
+    if (strip_cr) {
+        rendered_value_len = 0;
+
+        for (size_t i = 0; i < value_len; i++) {
+            if (value[i] != '\r') {
+                rendered_value_len++;
+            }
+        }
+    }
+
+    size_t remaining = MEM_HEAP_SIZE - *review_len;
+
+    if (title_len > remaining) {
+        return -1;
+    }
+    remaining -= title_len;
+
+    if (remaining < 1) {
+        return -1;
+    }
+    remaining--;
+
+    if (rendered_value_len > remaining) {
+        return -1;
+    }
+    remaining -= rendered_value_len;
+
+    if (add_separator && remaining < 2) {
+        return -1;
+    }
+
+    memcpy(&review[*review_len], title, title_len);
+    *review_len += title_len;
+    review[(*review_len)++] = '\n';
+
+    for (size_t i = 0; i < value_len; i++) {
+        if (!strip_cr || value[i] != '\r') {
+            review[(*review_len)++] = (char) value[i];
+        }
+    }
+
+    if (add_separator) {
+        review[(*review_len)++] = '\n';
+        review[(*review_len)++] = '\n';
+    }
+
+    return 0;
+}
+
 static app_err_t core_openpgp_confirm_identity(const core_openpgp_identity_t *identity) {
 
     if (identity == NULL) {
@@ -283,10 +352,6 @@ static app_err_t core_openpgp_confirm_identity(const core_openpgp_identity_t *id
     char creation_time_utc[CORE_OPENPGP_UTC_TIME_BUF_LEN];
     char *review = (char *) g_mem_heap;
     size_t review_len = 0;
-    size_t creation_time_len;
-    size_t uid_title_len;
-    size_t creation_time_title_len;
-    size_t fingerprint_title_len;
 
     if (uid == NULL ||
         uid_len == 0 ||
@@ -305,48 +370,39 @@ static app_err_t core_openpgp_confirm_identity(const core_openpgp_identity_t *id
 
     base16_encode(fingerprint, fingerprint_hex, OPENPGP_V4_FINGERPRINT_LEN);
 
-    if (core_openpgp_format_unix_time_utc(creation_time, creation_time_utc, sizeof(creation_time_utc)) != 0) {
+    if (core_openpgp_format_unix_time_utc(
+            creation_time,
+            creation_time_utc,
+            sizeof(creation_time_utc)) != 0) {
         return ERR_DATA;
     }
 
-    creation_time_len = CORE_OPENPGP_UTC_TIME_LEN;
-    uid_title_len = strlen(LSTR(OPENPGP_UID_TITLE));
-    creation_time_title_len = strlen(LSTR(OPENPGP_CREATION_TIME_TITLE));
-    fingerprint_title_len = strlen(LSTR(OPENPGP_FINGERPRINT_TITLE));
-
-    if (uid_title_len + 1 +
-        uid_len + 2 +
-        creation_time_title_len + 1 +
-        creation_time_len + 2 +
-        fingerprint_title_len + 1 +
-        (OPENPGP_V4_FINGERPRINT_LEN * 2) > MEM_HEAP_SIZE) {
+    if (core_openpgp_review_append_field(
+            review,
+            &review_len,
+            LSTR(OPENPGP_UID_TITLE),
+            uid,
+            uid_len,
+            0,
+            1) != 0 ||
+        core_openpgp_review_append_field(
+            review,
+            &review_len,
+            LSTR(OPENPGP_CREATION_TIME_TITLE),
+            (const uint8_t *) creation_time_utc,
+            CORE_OPENPGP_UTC_TIME_LEN,
+            0,
+            1) != 0 ||
+        core_openpgp_review_append_field(
+            review,
+            &review_len,
+            LSTR(OPENPGP_FINGERPRINT_TITLE),
+            (const uint8_t *) fingerprint_hex,
+            OPENPGP_V4_FINGERPRINT_LEN * 2,
+            0,
+            0) != 0) {
         return ERR_DATA;
     }
-
-    memcpy(&review[review_len], LSTR(OPENPGP_UID_TITLE), uid_title_len);
-    review_len += uid_title_len;
-    review[review_len++] = '\n';
-
-    memcpy(&review[review_len], uid, uid_len);
-    review_len += uid_len;
-    review[review_len++] = '\n';
-    review[review_len++] = '\n';
-
-    memcpy(&review[review_len], LSTR(OPENPGP_CREATION_TIME_TITLE), creation_time_title_len);
-    review_len += creation_time_title_len;
-    review[review_len++] = '\n';
-
-    memcpy(&review[review_len], creation_time_utc, creation_time_len);
-    review_len += creation_time_len;
-    review[review_len++] = '\n';
-    review[review_len++] = '\n';
-
-    memcpy(&review[review_len], LSTR(OPENPGP_FINGERPRINT_TITLE), fingerprint_title_len);
-    review_len += fingerprint_title_len;
-    review[review_len++] = '\n';
-
-    memcpy(&review[review_len], fingerprint_hex, OPENPGP_V4_FINGERPRINT_LEN * 2);
-    review_len += OPENPGP_V4_FINGERPRINT_LEN * 2;
 
     if (ui_display_paged_text(
             LSTR(OPENPGP_APPROVE_TITLE),
@@ -482,47 +538,32 @@ static app_err_t core_openpgp_confirm_message(const core_openpgp_message_t *mess
         return ERR_DATA;
     }
 
-    size_t message_title_len = strlen(LSTR(OPENPGP_MESSAGE_TITLE));
-    size_t signature_time_title_len = strlen(LSTR(OPENPGP_SIGNATURE_TIME_TITLE));
-    size_t fingerprint_title_len = strlen(LSTR(OPENPGP_FINGERPRINT_TITLE));
-
-    if (message_title_len + 1 +
-        message->message_len + 2 +
-        signature_time_title_len + 1 +
-        CORE_OPENPGP_UTC_TIME_LEN + 2 +
-        fingerprint_title_len + 1 +
-        (OPENPGP_V4_FINGERPRINT_LEN * 2) > MEM_HEAP_SIZE) {
+    if (core_openpgp_review_append_field(
+            review,
+            &review_len,
+            LSTR(OPENPGP_MESSAGE_TITLE),
+            message->message,
+            message->message_len,
+            1,
+            1) != 0 ||
+        core_openpgp_review_append_field(
+            review,
+            &review_len,
+            LSTR(OPENPGP_SIGNATURE_TIME_TITLE),
+            (const uint8_t *) signature_time_utc,
+            CORE_OPENPGP_UTC_TIME_LEN,
+            0,
+            1) != 0 ||
+        core_openpgp_review_append_field(
+            review,
+            &review_len,
+            LSTR(OPENPGP_FINGERPRINT_TITLE),
+            (const uint8_t *) fingerprint_hex,
+            OPENPGP_V4_FINGERPRINT_LEN * 2,
+            0,
+            0) != 0) {
         return ERR_DATA;
     }
-
-    memcpy(&review[review_len], LSTR(OPENPGP_MESSAGE_TITLE), message_title_len);
-    review_len += message_title_len;
-    review[review_len++] = '\n';
-
-    for (size_t i = 0; i < message->message_len; i++) {
-        if (message->message[i] != '\r') {
-            review[review_len++] = (char) message->message[i];
-        }
-    }
-
-    review[review_len++] = '\n';
-    review[review_len++] = '\n';
-
-    memcpy(&review[review_len], LSTR(OPENPGP_SIGNATURE_TIME_TITLE), signature_time_title_len);
-    review_len += signature_time_title_len;
-    review[review_len++] = '\n';
-
-    memcpy(&review[review_len], signature_time_utc, CORE_OPENPGP_UTC_TIME_LEN);
-    review_len += CORE_OPENPGP_UTC_TIME_LEN;
-    review[review_len++] = '\n';
-    review[review_len++] = '\n';
-
-    memcpy(&review[review_len], LSTR(OPENPGP_FINGERPRINT_TITLE), fingerprint_title_len);
-    review_len += fingerprint_title_len;
-    review[review_len++] = '\n';
-
-    memcpy(&review[review_len], fingerprint_hex, OPENPGP_V4_FINGERPRINT_LEN * 2);
-    review_len += OPENPGP_V4_FINGERPRINT_LEN * 2;
 
     if (ui_display_paged_text(
             LSTR(OPENPGP_SIGN_APPROVE_TITLE),
