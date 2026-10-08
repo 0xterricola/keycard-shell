@@ -16,8 +16,6 @@
 #include "ui/ui.h"
 #include "ur/ur_encode.h"
 
-#define OPENPGP_UID_CERT_SIGNATURE_TYPE 0x13
-
 #define CORE_OPENPGP_SIGNATURE_PACKET_MAX_LEN 122
 #define CORE_OPENPGP_IDENTITY_MAX_LEN 461
 #define CORE_OPENPGP_UTC_TIME_LEN 23
@@ -75,8 +73,7 @@ static const uint32_t OPENPGP_KEY_PATH[OPENPGP_KEY_PATH_LEN] = {
 };
 
 #define OPENPGP_UID_CERT_ISSUER_FINGERPRINT_OFFSET 9
-#define OPENPGP_UID_CERT_ISSUER_KEY_ID_OFFSET \
-    (OPENPGP_V4_UID_CERT_SIG_FIELDS_LEN + 4)
+#define OPENPGP_UID_CERT_ISSUER_KEY_ID_OFFSET (OPENPGP_V4_UID_CERT_SIG_FIELDS_LEN + 4)
 
 static app_err_t core_openpgp_prepare_key(uint8_t *path, uint16_t path_len, uint32_t creation_time, uint8_t *primary_key_body, size_t primary_key_body_capacity, size_t *primary_key_body_len, uint8_t fingerprint[OPENPGP_V4_FINGERPRINT_LEN]) {
 
@@ -577,7 +574,7 @@ static app_err_t core_openpgp_confirm_message(const core_openpgp_message_t *mess
 
 static app_err_t core_openpgp_sign_message_at_path(core_openpgp_message_t *message, uint8_t *out, size_t out_capacity, size_t *out_len) {
     uint8_t card_signature[OPENPGP_RAW_ECDSA_LEN + 1];
-    uint8_t issuer_key_id[8];
+    uint8_t issuer_key_id[OPENPGP_ISSUER_KEY_ID_LEN];
     size_t signature_packet_len = 0;
 
     if (message == NULL ||
@@ -724,7 +721,7 @@ static app_err_t core_openpgp_build_uid_certification_packet(core_openpgp_identi
     size_t out_capacity = sizeof(identity->certification_packet);
     size_t *out_len = &identity->certification_packet_len;
 
-    uint8_t issuer_key_id[8];
+    uint8_t issuer_key_id[OPENPGP_ISSUER_KEY_ID_LEN];
 
     if (certification == NULL ||
         fingerprint == NULL ||
@@ -814,20 +811,19 @@ static int core_openpgp_validate_identity_binding(const openpgp_cert_target_t *t
     signature_body = target->self_cert_body;
 
     /* Validate the certification metadata layout we emit. */
-    if (target->self_cert_body_len <
-            OPENPGP_UID_CERT_ISSUER_KEY_ID_OFFSET + 8 ||
+    if (target->self_cert_body_len < OPENPGP_UID_CERT_ISSUER_KEY_ID_OFFSET + OPENPGP_ISSUER_KEY_ID_LEN ||
         signature_body[4] != 0x00 ||
-        signature_body[5] != 0x20 ||
-        signature_body[6] != 0x16 ||
-        signature_body[7] != 0x21 ||
-        signature_body[8] != 0x04 ||
-        signature_body[OPENPGP_V4_SIG_FIELDS_LEN] != 0x02 ||
-        signature_body[OPENPGP_V4_SIG_FIELDS_LEN + 1] != 0x1b ||
-        signature_body[OPENPGP_V4_SIG_FIELDS_LEN + 2] != 0x03 ||
+        signature_body[5] != OPENPGP_UID_CERT_HASHED_SUBPACKETS_LEN ||
+        signature_body[6] != OPENPGP_ISSUER_FINGERPRINT_SUBPACKET_LEN ||
+        signature_body[7] != OPENPGP_SUBPACKET_ISSUER_FINGERPRINT ||
+        signature_body[8] != OPENPGP_VERSION_4 ||
+        signature_body[OPENPGP_V4_SIG_FIELDS_LEN] != OPENPGP_KEY_FLAGS_SUBPACKET_LEN ||
+        signature_body[OPENPGP_V4_SIG_FIELDS_LEN + 1] != OPENPGP_SUBPACKET_KEY_FLAGS ||
+        signature_body[OPENPGP_V4_SIG_FIELDS_LEN + 2] != OPENPGP_KEY_FLAGS_CERTIFY_SIGN ||
         signature_body[OPENPGP_V4_UID_CERT_SIG_FIELDS_LEN] != 0x00 ||
-        signature_body[OPENPGP_V4_UID_CERT_SIG_FIELDS_LEN + 1] != 0x0a ||
-        signature_body[OPENPGP_V4_UID_CERT_SIG_FIELDS_LEN + 2] != 0x09 ||
-        signature_body[OPENPGP_V4_UID_CERT_SIG_FIELDS_LEN + 3] != 0x10) {
+        signature_body[OPENPGP_V4_UID_CERT_SIG_FIELDS_LEN + 1] != OPENPGP_SIG_UNHASHED_SUBPACKETS_LEN ||
+        signature_body[OPENPGP_V4_UID_CERT_SIG_FIELDS_LEN + 2] != OPENPGP_ISSUER_KEY_ID_SUBPACKET_LEN ||
+        signature_body[OPENPGP_V4_UID_CERT_SIG_FIELDS_LEN + 3] != OPENPGP_SUBPACKET_ISSUER_KEY_ID) {
         return -1;
     }
 
@@ -835,7 +831,7 @@ static int core_openpgp_validate_identity_binding(const openpgp_cert_target_t *t
         return -1;
     }
 
-    if (memcmp(&signature_body[OPENPGP_UID_CERT_ISSUER_KEY_ID_OFFSET], &fingerprint[OPENPGP_V4_FINGERPRINT_LEN - 8], 8) != 0) {
+    if (memcmp(&signature_body[OPENPGP_UID_CERT_ISSUER_KEY_ID_OFFSET], &fingerprint[OPENPGP_V4_FINGERPRINT_LEN - OPENPGP_ISSUER_KEY_ID_LEN], OPENPGP_ISSUER_KEY_ID_LEN) != 0) {
         return -1;
     }
 
@@ -897,7 +893,7 @@ static app_err_t core_openpgp_assemble_and_verify_identity(const core_openpgp_id
         memcmp(target.user_id, uid, uid_len) != 0 ||
         target.self_cert_packet_len != certification_packet_len ||
         memcmp(target.self_cert_packet, certification_packet, certification_packet_len) != 0 ||
-        target.self_cert_type != OPENPGP_UID_CERT_SIGNATURE_TYPE) {
+        target.self_cert_type != OPENPGP_SIG_TYPE_POSITIVE_CERT) {
         return ERR_DATA;
     }
 

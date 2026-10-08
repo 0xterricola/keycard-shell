@@ -7,11 +7,7 @@
 #include "crypto/secp256k1.h"
 #include "openpgp/openpgp_v4.h"
 
-#define OPENPGP_ALGO_ECDSA    19
-#define OPENPGP_ALGO_EDDSA    22
-
-#define OPENPGP_HASH_SHA256    8
-
+/* secp256k1 OID: 1.3.132.0.10 */
 static const uint8_t secp256k1_oid[] = {
   0x2b, 0x81, 0x04, 0x00, 0x0a
 };
@@ -55,7 +51,7 @@ int openpgp_v4_build_public_key_body(const uint8_t *point, size_t point_len, uin
     return -1;
   }
 
-  if (point_len != 65 || point[0] != 0x04) {
+  if (point_len != OPENPGP_SECP256K1_POINT_LEN || point[0] != OPENPGP_EC_POINT_UNCOMPRESSED) {
     return -1;
   }
 
@@ -65,7 +61,7 @@ int openpgp_v4_build_public_key_body(const uint8_t *point, size_t point_len, uin
     return -1;
   }
 
-  out[p++] = 0x04;
+  out[p++] = OPENPGP_VERSION_4;
 
   out[p++] = (uint8_t)(creation_time >> 24);
   out[p++] = (uint8_t)(creation_time >> 16);
@@ -91,7 +87,7 @@ int openpgp_v4_build_public_key_body(const uint8_t *point, size_t point_len, uin
 }
 
 int openpgp_v4_build_sig_fields(const uint8_t fingerprint[OPENPGP_V4_FINGERPRINT_LEN], uint32_t creation_time, uint8_t *out, size_t out_capacity, size_t *out_len) {
-  return openpgp_v4_build_sig_fields_for_type(0x01, fingerprint, creation_time, out, out_capacity, out_len);
+  return openpgp_v4_build_sig_fields_for_type(OPENPGP_SIG_TYPE_CANONICAL_TEXT, fingerprint, creation_time, out, out_capacity, out_len);
 }
 
 int openpgp_v4_build_sig_fields_for_type(uint8_t signature_type, const uint8_t fingerprint[OPENPGP_V4_FINGERPRINT_LEN], uint32_t creation_time, uint8_t *out, size_t out_capacity, size_t *out_len) {
@@ -106,7 +102,7 @@ int openpgp_v4_build_sig_fields_for_type(uint8_t signature_type, const uint8_t f
   }
 
   /* Version 4 signature. */
-  out[p++] = 0x04;
+  out[p++] = OPENPGP_VERSION_4;
 
   /* Signature type selected by the trusted protocol operation. */
   out[p++] = signature_type;
@@ -127,17 +123,17 @@ int openpgp_v4_build_sig_fields_for_type(uint8_t signature_type, const uint8_t f
    *     05 02 <4-byte timestamp>
    */
   out[p++] = 0x00;
-  out[p++] = 0x1d;
+  out[p++] = OPENPGP_SIG_HASHED_SUBPACKETS_LEN;
 
-  out[p++] = 0x16;
-  out[p++] = 0x21;
-  out[p++] = 0x04;
+  out[p++] = OPENPGP_ISSUER_FINGERPRINT_SUBPACKET_LEN;
+  out[p++] = OPENPGP_SUBPACKET_ISSUER_FINGERPRINT;
+  out[p++] = OPENPGP_VERSION_4;
 
   memcpy(&out[p], fingerprint, OPENPGP_V4_FINGERPRINT_LEN);
   p += OPENPGP_V4_FINGERPRINT_LEN;
 
-  out[p++] = 0x05;
-  out[p++] = 0x02;
+  out[p++] = OPENPGP_SIG_CREATION_TIME_SUBPACKET_LEN;
+  out[p++] = OPENPGP_SUBPACKET_SIG_CREATION_TIME;
 
   out[p++] = (uint8_t)(creation_time >> 24);
   out[p++] = (uint8_t)(creation_time >> 16);
@@ -160,13 +156,7 @@ int openpgp_v4_build_uid_cert_sig_fields(const uint8_t fingerprint[OPENPGP_V4_FI
     return -1;
   }
 
-  if (openpgp_v4_build_sig_fields_for_type(
-          0x13,
-          fingerprint,
-          creation_time,
-          out,
-          out_capacity,
-          &sig_fields_len) != 0 ||
+  if (openpgp_v4_build_sig_fields_for_type(OPENPGP_SIG_TYPE_POSITIVE_CERT, fingerprint, creation_time, out, out_capacity, &sig_fields_len) != 0 ||
       sig_fields_len != OPENPGP_V4_SIG_FIELDS_LEN) {
     return -1;
   }
@@ -179,11 +169,11 @@ int openpgp_v4_build_uid_cert_sig_fields(const uint8_t fingerprint[OPENPGP_V4_FI
    * where 0x03 advertises certify + sign.
    */
   out[4] = 0x00;
-  out[5] = 0x20;
+  out[5] = OPENPGP_UID_CERT_HASHED_SUBPACKETS_LEN;
 
-  out[OPENPGP_V4_SIG_FIELDS_LEN] = 0x02;
-  out[OPENPGP_V4_SIG_FIELDS_LEN + 1] = 0x1b;
-  out[OPENPGP_V4_SIG_FIELDS_LEN + 2] = 0x03;
+  out[OPENPGP_V4_SIG_FIELDS_LEN] = OPENPGP_KEY_FLAGS_SUBPACKET_LEN;
+  out[OPENPGP_V4_SIG_FIELDS_LEN + 1] = OPENPGP_SUBPACKET_KEY_FLAGS;
+  out[OPENPGP_V4_SIG_FIELDS_LEN + 2] = OPENPGP_KEY_FLAGS_CERTIFY_SIGN;
 
   *out_len = OPENPGP_V4_UID_CERT_SIG_FIELDS_LEN;
   return 0;
@@ -398,7 +388,7 @@ static int encode_mpi(const uint8_t *value, size_t value_len, uint8_t *out, size
   return 0;
 }
 
-int openpgp_v4_build_signature_packet(const uint8_t *sig_fields, size_t sig_fields_len, const uint8_t digest[OPENPGP_SHA256_LEN], const uint8_t raw_signature[OPENPGP_RAW_ECDSA_LEN], const uint8_t issuer_key_id[8], uint8_t *out, size_t out_capacity, size_t *out_len) {
+int openpgp_v4_build_signature_packet(const uint8_t *sig_fields, size_t sig_fields_len, const uint8_t digest[OPENPGP_SHA256_LEN], const uint8_t raw_signature[OPENPGP_RAW_ECDSA_LEN], const uint8_t issuer_key_id[OPENPGP_ISSUER_KEY_ID_LEN], uint8_t *out, size_t out_capacity, size_t *out_len) {
   uint8_t body[160];
   size_t p = 0;
   size_t mpi_len;
@@ -425,13 +415,13 @@ int openpgp_v4_build_signature_packet(const uint8_t *sig_fields, size_t sig_fiel
    *   8-byte key ID
    */
   body[p++] = 0x00;
-  body[p++] = 0x0a;
+  body[p++] = OPENPGP_SIG_UNHASHED_SUBPACKETS_LEN;
 
-  body[p++] = 0x09;
-  body[p++] = 0x10;
+  body[p++] = OPENPGP_ISSUER_KEY_ID_SUBPACKET_LEN;
+  body[p++] = OPENPGP_SUBPACKET_ISSUER_KEY_ID;
 
-  memcpy(&body[p], issuer_key_id, 8);
-  p += 8;
+  memcpy(&body[p], issuer_key_id, OPENPGP_ISSUER_KEY_ID_LEN);
+  p += OPENPGP_ISSUER_KEY_ID_LEN;
 
   /* Leftmost 16 bits of the signed hash. */
   body[p++] = digest[0];
@@ -604,9 +594,9 @@ int openpgp_v4_verify_uid_self_cert(const uint8_t *primary_key_body, size_t prim
    * Version-4 certification signature over SHA-256 with ECDSA.
    */
   if (signature_body_len < 10 ||
-      signature_body[0] != 0x04 ||
-      signature_body[1] < 0x10 ||
-      signature_body[1] > 0x13 ||
+      signature_body[0] != OPENPGP_VERSION_4 ||
+      signature_body[1] < OPENPGP_SIG_TYPE_GENERIC_CERT ||
+      signature_body[1] > OPENPGP_SIG_TYPE_POSITIVE_CERT ||
       signature_body[2] != OPENPGP_ALGO_ECDSA ||
       signature_body[3] != OPENPGP_HASH_SHA256) {
     return -1;
