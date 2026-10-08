@@ -10,7 +10,12 @@
 #define OPENPGP_OP_SIGN_MESSAGE 2
 
 #define OPENPGP_UID_MAX_LEN 255
-#define OPENPGP_MESSAGE_MAX_LEN 104
+/*
+ * Bound SIGN_MESSAGE text for practical, complete on-device review.
+ * The card signs a SHA-256 digest, so this is not a signing-payload limit.
+ * 255 bytes keeps worst-case newline-heavy input well below the UI pager cap.
+ */
+#define OPENPGP_MESSAGE_MAX_LEN 255
 
 typedef struct {
     uint8_t operation;
