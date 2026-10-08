@@ -14,16 +14,12 @@ typedef struct {
 
 static uint16_t read_be16(const uint8_t *p) {
 
-    return ((uint16_t)p[0] << 8) |
-           (uint16_t)p[1];
+    return ((uint16_t)p[0] << 8) | (uint16_t)p[1];
 }
 
 static uint32_t read_be32(const uint8_t *p) {
 
-    return ((uint32_t)p[0] << 24) |
-           ((uint32_t)p[1] << 16) |
-           ((uint32_t)p[2] << 8) |
-           (uint32_t)p[3];
+    return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) | ((uint32_t)p[2] << 8) | (uint32_t)p[3];
 }
 
 static int parse_packet(const uint8_t *data, size_t data_len, packet_view_t *packet, size_t *consumed) {
@@ -64,10 +60,7 @@ static int parse_packet(const uint8_t *data, size_t data_len, packet_view_t *pac
                 return -1;
             }
 
-            body_len =
-                ((size_t)(first_len - 192) << 8) +
-                data[pos++] +
-                192;
+            body_len = ((size_t)(first_len - 192) << 8) + data[pos++] + 192;
         } else if (first_len == 255) {
             if (data_len - pos < 4) {
                 return -1;
